@@ -7,24 +7,28 @@ import meRoutes from "./routes/me.js";
 import applicationRoutes from "./routes/applications.js";
 import statsRoutes from "./routes/stats.js";
 import adminRoutes from "./routes/admin.js";
+import paymentRoutes, { stripeWebhook } from "./routes/payments.js";
 
 const app = express();
 
 app.use(cors({ origin: process.env.CLIENT_URL, credentials: true }));
+
+// Stripe needs the RAW body to check the signature, so this comes BEFORE express.json()
+app.post("/api/payments/webhook", express.raw({ type: "application/json" }), stripeWebhook);
+
 app.use(express.json());
 
 app.get("/", (req, res) => {
   res.send("MentorLagbe API is running 🚀");
 });
 
-// Every route inside tuitionRoutes gets the /api/tuitions prefix
 app.use("/api/tuitions", tuitionRoutes);
 app.use("/api/me", meRoutes);
 app.use("/api/applications", applicationRoutes);
 app.use("/api/stats", statsRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/payments", paymentRoutes);
 
-// If no route matched, return a clean JSON 404 instead of an HTML page
 app.use((req, res) => {
   res.status(404).json({ message: "Route not found" });
 });
