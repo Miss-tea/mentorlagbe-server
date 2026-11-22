@@ -67,4 +67,46 @@ router.post("/", verifyToken, verifyStudent, async (req, res) => {
   }
 });
 
+// GET /api/applications/my → all applications of the logged-in student
+router.get("/my", verifyToken, verifyStudent, async (req, res) => {
+  try {
+    const list = await applications()
+      .find({ studentEmail: req.user.email })
+      .sort({ appliedAt: -1 })
+      .toArray();
+
+    // Applications store only tutorEmail, so look up the tutor names from the tuitions
+    const ids = list.map((a) => a.tuitionId).filter(ObjectId.isValid).map((id) => new ObjectId(id));
+    const related = await tuitions()
+      .find({ _id: { $in: ids } }, { projection: { tutorName: 1 } })
+      .toArray();
+    const nameById = Object.fromEntries(related.map((t) => [String(t._id), t.tutorName]));
+
+    res.json(list.map((a) => ({ ...a, tutorName: nameById[a.tuitionId] || a.tutorEmail })));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to load applications" });
+  }
+});
+
+// DELETE /api/applications/:id → a student cancels their OWN application, only while pending
+router.delete("/:id", verifyToken, verifyStudent, async (req, res) => {
+  try {
+    if (!ObjectId.isValid(req.params.id)) return res.status(400).json({ message: "Invalid application id" });
+
+    const result = await applications().deleteOne({
+      _id: new ObjectId(req.params.id),
+      studentEmail: req.user.email, // can't delete someone else's application
+      status: "pending",            // can't delete once the tutor has decided
+    });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ message: "Only your own pending applications can be cancelled" });
+    }
+    res.json({ message: "Application cancelled" });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to cancel application" });
+  }
+});
+
 export default router;

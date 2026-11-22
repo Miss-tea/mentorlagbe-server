@@ -5,6 +5,7 @@ import { connectDB } from "./db.js";
 import tuitionRoutes from "./routes/tuitions.js";
 import meRoutes from "./routes/me.js";
 import applicationRoutes from "./routes/applications.js";
+import statsRoutes from "./routes/stats.js";
 
 const app = express();
 
@@ -19,6 +20,7 @@ app.get("/", (req, res) => {
 app.use("/api/tuitions", tuitionRoutes);
 app.use("/api/me", meRoutes);
 app.use("/api/applications", applicationRoutes);
+app.use("/api/stats", statsRoutes);
 
 // If no route matched, return a clean JSON 404 instead of an HTML page
 app.use((req, res) => {
