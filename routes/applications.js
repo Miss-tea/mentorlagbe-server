@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { ObjectId } from "mongodb";
 import { applications, tuitions } from "../db.js";
-import { verifyToken, verifyStudent } from "../middleware/auth.js";
+import { verifyToken, verifyStudent, verifyTutor } from "../middleware/auth.js";
 
 const router = Router();
 
@@ -106,6 +106,36 @@ router.delete("/:id", verifyToken, verifyStudent, async (req, res) => {
     res.json({ message: "Application cancelled" });
   } catch (err) {
     res.status(500).json({ message: "Failed to cancel application" });
+  }
+});
+
+// GET /api/applications/received → applications sent to the logged-in tutor's tuitions
+router.get("/received", verifyToken, verifyTutor, async (req, res) => {
+  try {
+    const list = await applications().find({ tutorEmail: req.user.email }).sort({ appliedAt: -1 }).toArray();
+    res.json(list);
+  } catch (err) {
+    res.status(500).json({ message: "Failed to load applicants" });
+  }
+});
+
+// PATCH /api/applications/:id/status → tutor accepts or rejects
+router.patch("/:id/status", verifyToken, verifyTutor, async (req, res) => {
+  try {
+    const { status } = req.body;
+    if (!["accepted", "rejected"].includes(status)) {
+      return res.status(400).json({ message: "Status must be accepted or rejected" });
+    }
+    if (!ObjectId.isValid(req.params.id)) return res.status(400).json({ message: "Invalid application id" });
+
+    const result = await applications().updateOne(
+      { _id: new ObjectId(req.params.id), tutorEmail: req.user.email }, // only YOUR applicants
+      { $set: { status } }
+    );
+    if (!result.matchedCount) return res.status(404).json({ message: "Application not found" });
+    res.json({ message: `Application ${status}` });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to update application" });
   }
 });
 

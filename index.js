@@ -6,6 +6,7 @@ import tuitionRoutes from "./routes/tuitions.js";
 import meRoutes from "./routes/me.js";
 import applicationRoutes from "./routes/applications.js";
 import statsRoutes from "./routes/stats.js";
+import adminRoutes from "./routes/admin.js";
 
 const app = express();
 
@@ -21,6 +22,7 @@ app.use("/api/tuitions", tuitionRoutes);
 app.use("/api/me", meRoutes);
 app.use("/api/applications", applicationRoutes);
 app.use("/api/stats", statsRoutes);
+app.use("/api/admin", adminRoutes);
 
 // If no route matched, return a clean JSON 404 instead of an HTML page
 app.use((req, res) => {

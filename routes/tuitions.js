@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { ObjectId } from "mongodb";
-import { tuitions } from "../db.js";
+import { tuitions, users, applications } from "../db.js";
+import { verifyToken, verifyTutor } from "../middleware/auth.js";
+import { cleanTuition } from "../utils/validateTuition.js";
 
 const router = Router();
 
@@ -69,6 +71,16 @@ router.get("/filters/options", async (req, res) => {
   }
 });
 
+// GET /api/tuitions/mine → every tuition of the logged-in tutor (any approval status)
+router.get("/mine", verifyToken, verifyTutor, async (req, res) => {
+  try {
+    const list = await tuitions().find({ tutorEmail: req.user.email }).sort({ createdAt: -1 }).toArray();
+    res.json(list);
+  } catch (err) {
+    res.status(500).json({ message: "Failed to load your tuitions" });
+  }
+});
+
 // GET /api/tuitions/:id → a single tuition for the details page
 router.get("/:id", async (req, res) => {
   try {
@@ -85,6 +97,89 @@ router.get("/:id", async (req, res) => {
     res.json(tuition);
   } catch (err) {
     res.status(500).json({ message: "Failed to load tuition" });
+  }
+});
+
+// POST /api/tuitions → a tutor posts a new tuition
+router.post("/", verifyToken, verifyTutor, async (req, res) => {
+  try {
+    const { error, data } = cleanTuition(req.body);
+    if (error) return res.status(400).json({ message: error });
+
+    // Free tutors: max 2 posts. Pro tutors: unlimited.
+    if (req.user.plan !== "pro") {
+      const count = await tuitions().countDocuments({ tutorEmail: req.user.email });
+      if (count >= 2) {
+        return res.status(403).json({ message: "Free plan allows 2 tuition posts. Upgrade to Pro for unlimited posts." });
+      }
+    }
+
+    const doc = {
+      ...data,
+      tutorName: req.user.name,    // from the verified token, never from the request body
+      tutorEmail: req.user.email,
+      approvalStatus: "pending",   // every new post waits for admin review
+      isActive: true,
+      createdAt: new Date(),
+    };
+    const result = await tuitions().insertOne(doc);
+    res.status(201).json({ message: "Tuition submitted for admin approval", id: result.insertedId });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to create tuition" });
+  }
+});
+
+// PUT /api/tuitions/:id → edit your own tuition (goes back to pending for re-approval)
+router.put("/:id", verifyToken, verifyTutor, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!ObjectId.isValid(id)) return res.status(400).json({ message: "Invalid tuition id" });
+
+    const { error, data } = cleanTuition(req.body);
+    if (error) return res.status(400).json({ message: error });
+
+    const result = await tuitions().updateOne(
+      { _id: new ObjectId(id), tutorEmail: req.user.email }, // ownership check
+      { $set: { ...data, approvalStatus: "pending", updatedAt: new Date() } }
+    );
+    if (!result.matchedCount) return res.status(404).json({ message: "Tuition not found" });
+    res.json({ message: "Tuition updated and sent for re-approval" });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to update tuition" });
+  }
+});
+
+// PATCH /api/tuitions/:id/toggle → flip Active / Closed in one atomic step
+router.patch("/:id/toggle", verifyToken, verifyTutor, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!ObjectId.isValid(id)) return res.status(400).json({ message: "Invalid tuition id" });
+
+    const result = await tuitions().updateOne(
+      { _id: new ObjectId(id), tutorEmail: req.user.email },
+      [{ $set: { isActive: { $not: "$isActive" } } }] // an update pipeline
+    );
+    if (!result.matchedCount) return res.status(404).json({ message: "Tuition not found" });
+    res.json({ message: "Status updated" });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to update status" });
+  }
+});
+
+// DELETE /api/tuitions/:id → delete your tuition and its applications
+router.delete("/:id", verifyToken, verifyTutor, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!ObjectId.isValid(id)) return res.status(400).json({ message: "Invalid tuition id" });
+
+    const result = await tuitions().deleteOne({ _id: new ObjectId(id), tutorEmail: req.user.email });
+    if (!result.deletedCount) return res.status(404).json({ message: "Tuition not found" });
+
+    await applications().deleteMany({ tuitionId: id }); // don't leave orphaned applications
+    res.json({ message: "Tuition deleted" });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to delete tuition" });
   }
 });
 
