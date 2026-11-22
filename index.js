@@ -1,25 +1,24 @@
-import "dotenv/config"; // must be the first import
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
-import { connectDB, tuitions } from "./db.js";
+import { connectDB } from "./db.js";
+import tuitionRoutes from "./routes/tuitions.js";
 
 const app = express();
 
-// Middleware = functions that run on every request, in order
 app.use(cors({ origin: process.env.CLIENT_URL, credentials: true }));
-app.use(express.json()); // lets us read JSON sent in request bodies
+app.use(express.json());
 
-// A "route": when someone visits GET /, run this function
 app.get("/", (req, res) => {
   res.send("MentorLagbe API is running 🚀");
 });
 
-app.get("/api/tuitions", async (req, res) => {
-  const list = await tuitions()
-    .find({ approvalStatus: "approved", isActive: true })
-    .sort({ createdAt: -1 })
-    .toArray();
-  res.json(list);
+// Every route inside tuitionRoutes gets the /api/tuitions prefix
+app.use("/api/tuitions", tuitionRoutes);
+
+// If no route matched, return a clean JSON 404 instead of an HTML page
+app.use((req, res) => {
+  res.status(404).json({ message: "Route not found" });
 });
 
 const port = process.env.PORT || 5000;
