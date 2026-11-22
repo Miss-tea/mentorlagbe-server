@@ -1,3 +1,9 @@
+import dns from "node:dns";
+
+// Some internet providers block the DNS lookups MongoDB Atlas needs.
+// Use Google and Cloudflare DNS for this program (only on your own computer).
+if (!process.env.VERCEL) dns.setServers(["8.8.8.8", "1.1.1.1"]);
+
 import { MongoClient } from "mongodb";
 
 let db;
