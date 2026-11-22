@@ -12,6 +12,10 @@ export async function connectDB() {
   const client = new MongoClient(process.env.MONGODB_URI);
   await client.connect();
   db = client.db(process.env.DB_NAME);
+
+  // One student can apply to a given tuition only once (enforced by the database itself)
+  await applications().createIndex({ tuitionId: 1, studentEmail: 1 }, { unique: true });
+
   console.log("✅ MongoDB connected");
   return db;
 }

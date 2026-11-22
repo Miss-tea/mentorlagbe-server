@@ -3,6 +3,8 @@ import express from "express";
 import cors from "cors";
 import { connectDB } from "./db.js";
 import tuitionRoutes from "./routes/tuitions.js";
+import meRoutes from "./routes/me.js";
+import applicationRoutes from "./routes/applications.js";
 
 const app = express();
 
@@ -15,6 +17,8 @@ app.get("/", (req, res) => {
 
 // Every route inside tuitionRoutes gets the /api/tuitions prefix
 app.use("/api/tuitions", tuitionRoutes);
+app.use("/api/me", meRoutes);
+app.use("/api/applications", applicationRoutes);
 
 // If no route matched, return a clean JSON 404 instead of an HTML page
 app.use((req, res) => {
